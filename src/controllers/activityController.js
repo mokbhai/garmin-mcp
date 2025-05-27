@@ -78,11 +78,7 @@ class ActivityController {
           .json({ error: "User not properly authenticated" });
       }
 
-      // Get activities for the last 24 hours
-      const endTime = Math.floor(Date.now() / 1000);
-      const startTime = endTime - 24 * 60 * 60; // 24 hours ago
-
-      const url = `https://apis.garmin.com/wellness-api/rest/activities?uploadStartTimeInSeconds=${startTime}&uploadEndTimeInSeconds=${endTime}`;
+      const url = `https://apis.garmin.com/wellness-api/rest/activities`;
 
       const activities = await this.makeAuthenticatedRequest(
         url,
