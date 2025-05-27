@@ -8,7 +8,6 @@ const ActivityController = require("./controllers/activityController");
 const {
   setDataRedisClient,
   getDataRedisClient,
-  deleteDataRedisClient,
   redisClient,
 } = require("./config/redis");
 require("dotenv").config();
@@ -88,7 +87,6 @@ app.get(
       const userData = {
         token: req.user.token,
         tokenSecret: req.user.tokenSecret,
-        userId: req.user.userId,
         timestamp: new Date().toISOString(),
       };
 
@@ -148,24 +146,6 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
                         margin: 20px;
                         background-color: #f5f5f5;
                     }
-                    .header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 20px;
-                    }
-                    .disconnect-btn {
-                        background-color: #dc3545;
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        text-decoration: none;
-                    }
-                    .disconnect-btn:hover {
-                        background-color: #c82333;
-                    }
                     .activity-card {
                         background: white;
                         border-radius: 8px;
@@ -217,10 +197,7 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <h1>Your Recent Activities</h1>
-                    <a href="/disconnect" class="disconnect-btn">Disconnect Garmin</a>
-                </div>
+                <h1>Your Recent Activities</h1>
                 ${
                   activities && activities.length > 0
                     ? `
@@ -307,96 +284,6 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
             </body>
             </html>
         `);
-  }
-});
-
-// Disconnect endpoint
-app.get("/disconnect", ensureAuthenticated, async (req, res) => {
-  try {
-    // Deregister from Garmin
-    const deregisterData = {
-      deregistrations: [
-        {
-          userId: req.user.userId,
-          userAccessToken: req.user.token,
-        },
-      ],
-    };
-
-    // Make deregistration request to Garmin
-    const response = await fetch("https://apis.garmin.com/tools/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `OAuth oauth_consumer_key=${GARMIN_CONSUMER_KEY},oauth_token=${
-          req.user.token
-        },oauth_signature_method=HMAC-SHA1,oauth_timestamp=${Math.floor(
-          Date.now() / 1000
-        )},oauth_nonce=${Math.random()
-          .toString(36)
-          .substring(7)},oauth_version=1.0,oauth_signature=${
-          req.user.tokenSecret
-        }`,
-      },
-      body: JSON.stringify(deregisterData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Garmin deregistration failed: ${response.statusText}`);
-    }
-
-    // Clear user data from Redis
-    const userKey = `user:${req.user.token}`;
-    const activitiesKey = `activities:user:${req.user.token}`;
-
-    // await Promise.all([
-    //   deleteDataRedisClient(userKey),
-    //   deleteDataRedisClient(activitiesKey),
-    // ]);
-
-    // Destroy the session
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("Error destroying session:", err);
-      }
-      // Clear the session cookie
-      res.clearCookie("garmin-session");
-      // Redirect to home page
-      res.redirect("/");
-    });
-  } catch (error) {
-    console.error("Error disconnecting Garmin:", error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-          <title>Error - Disconnecting Garmin</title>
-          <style>
-              body {
-                  font-family: Arial, sans-serif;
-                  margin: 20px;
-                  background-color: #f5f5f5;
-              }
-              .error-message {
-                  background: #fee;
-                  color: #c00;
-                  padding: 20px;
-                  border-radius: 8px;
-                  margin: 20px 0;
-              }
-          </style>
-      </head>
-      <body>
-          <h1>Error Disconnecting Garmin</h1>
-          <div class="error-message">
-              ${
-                error.message ||
-                "An error occurred while disconnecting. Please try again."
-              }
-          </div>
-      </body>
-      </html>
-    `);
   }
 });
 
