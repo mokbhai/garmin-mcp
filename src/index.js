@@ -5,6 +5,11 @@ const passport = require("passport");
 const OAuth1Strategy = require("passport-oauth1").Strategy;
 const activityController = require("./controllers/activityController");
 const ActivityController = require("./controllers/activityController");
+const {
+  setDataRedisClient,
+  getDataRedisClient,
+  redisClient,
+} = require("./config/redis");
 require("dotenv").config();
 
 const app = express();
@@ -12,12 +17,11 @@ const app = express();
 // Session configuration
 app.use(
   session({
+    name: "garmin-session",
+    store: redisClient,
     secret: process.env.SESSION_SECRET || "your-secret-key",
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
-    }),
   })
 );
 
@@ -75,9 +79,27 @@ app.get(
   passport.authenticate("oauth", {
     failureRedirect: "/login",
   }),
-  (req, res) => {
-    // Successful authentication
-    res.redirect("/dashboard");
+  async (req, res) => {
+    try {
+      // Store user data in Redis
+      const userData = {
+        token: req.user.token,
+        tokenSecret: req.user.tokenSecret,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Create a unique key for the user using their token
+      const userKey = `user:${req.user.token}`;
+
+      // Store in Redis with 24 hour expiry
+      await setDataRedisClient(userKey, JSON.stringify(userData), 24 * 60 * 60);
+
+      // Successful authentication
+      res.redirect("/dashboard");
+    } catch (error) {
+      console.error("Error storing user data in Redis:", error);
+      res.redirect("/dashboard");
+    }
   }
 );
 
@@ -88,8 +110,25 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
       GARMIN_CONSUMER_KEY,
       GARMIN_CONSUMER_SECRET
     );
+    
     // Get activities data
-    const activities = await activityController.getActivities(req, res);
+    let activities = await getDataRedisClient(
+      `activities:user:${req.user.token}`
+    );
+
+    if (activities) {
+      res.send(activities);
+      return;
+    }
+
+    if (!activities) {
+      activities = await activityController.getActivities(req, res);
+    }
+    await setDataRedisClient(
+      `activities:user:${req.user.token}`,
+      JSON.stringify(activities),
+      24 * 60 * 60
+    );
 
     // Render dashboard with activities
     res.send(`

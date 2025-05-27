@@ -1,9 +1,8 @@
-import dotenv from "dotenv";
-
+const dotenv = require("dotenv");
 dotenv.config();
 
 // Environment variables with defaults
-export const config = {
+const config = {
   port: process.env.PORT || 3000,
   strava: {
     clientId: process.env.STRAVA_CLIENT_ID,
@@ -16,12 +15,4 @@ export const config = {
   redisUri: process.env.REDIS_URI || "redis://localhost:6379",
 };
 
-// Initialize Strava client
-strava.config({
-  access_token: "",
-  client_id: config.strava.clientId,
-  client_secret: config.strava.clientSecret,
-  redirect_uri: config.strava.redirectUri,
-});
-
-export { strava };
+module.exports = { config };
