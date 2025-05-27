@@ -18,7 +18,9 @@ const app = express();
 app.use(
   session({
     name: "garmin-session",
-    store: redisClient,
+    store: new MemoryStore({
+      checkPeriod: 86400000, // prune expired entries every 24h
+    }),
     secret: process.env.SESSION_SECRET || "your-secret-key",
     resave: false,
     saveUninitialized: false,
@@ -110,25 +112,27 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
       GARMIN_CONSUMER_KEY,
       GARMIN_CONSUMER_SECRET
     );
-    
-    // Get activities data
+
+    // Get activities data from Redis first
     let activities = await getDataRedisClient(
       `activities:user:${req.user.token}`
     );
 
     if (activities) {
-      res.send(activities);
-      return;
-    }
-
-    if (!activities) {
+      activities = JSON.parse(activities);
+    } else {
+      // If not in Redis, fetch from Garmin API
       activities = await activityController.getActivities(req, res);
+
+      // Store in Redis with 24 hour expiry
+      if (activities) {
+        await setDataRedisClient(
+          `activities:user:${req.user.token}`,
+          JSON.stringify(activities),
+          24 * 60 * 60
+        );
+      }
     }
-    await setDataRedisClient(
-      `activities:user:${req.user.token}`,
-      JSON.stringify(activities),
-      24 * 60 * 60
-    );
 
     // Render dashboard with activities
     res.send(`
