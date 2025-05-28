@@ -78,7 +78,10 @@ class ActivityController {
           .json({ error: "User not properly authenticated" });
       }
 
-      const url = `https://apis.garmin.com/wellness-api/rest/activities`;
+      const endTime = Math.floor(Date.now() / 1000);
+      const startTime = endTime - 24 * 60 * 60; // 24 hours ago
+
+      const url = `https://apis.garmin.com/wellness-api/rest/activities?uploadStartTimeInSeconds=${startTime}&uploadEndTimeInSeconds=${endTime}`;
 
       const activities = await this.makeAuthenticatedRequest(
         url,
@@ -167,6 +170,31 @@ class ActivityController {
       return formattedDetails;
     } catch (error) {
       console.error("Error fetching activity details:", error);
+      throw error;
+    }
+  }
+
+  async getUserId(req, res) {
+    try {
+      const { token, tokenSecret } = req.user;
+
+      if (!token || !tokenSecret) {
+        return res
+          .status(401)
+          .json({ error: "User not properly authenticated" });
+      }
+
+      const url = "https://apis.garmin.com/wellness-api/rest/user/id";
+
+      const userData = await this.makeAuthenticatedRequest(
+        url,
+        token,
+        tokenSecret
+      );
+
+      return userData;
+    } catch (error) {
+      console.error("Error fetching user ID:", error);
       throw error;
     }
   }

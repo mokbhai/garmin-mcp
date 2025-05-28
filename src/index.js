@@ -83,18 +83,28 @@ app.get(
   }),
   async (req, res) => {
     try {
+      const activityController = new ActivityController(
+        GARMIN_CONSUMER_KEY,
+        GARMIN_CONSUMER_SECRET
+      );
+
+      const userIdResponse = await activityController.getUserId(req, res);
+
+      // Set userId in req.user object
+      req.user.userId = userIdResponse.userId;
+
       // Store user data in Redis
       const userData = {
+        userId: userIdResponse.userId,
         token: req.user.token,
         tokenSecret: req.user.tokenSecret,
         timestamp: new Date().toISOString(),
       };
-
-      // Create a unique key for the user using their token
-      const userKey = `user:${req.user.token}`;
+      // Create a unique key for the user using their userId
+      const userKey = `user:${userIdResponse.userId}`;
 
       // Store in Redis with 24 hour expiry
-      await setDataRedisClient(userKey, JSON.stringify(userData), 24 * 60 * 60);
+      await setDataRedisClient(userKey, JSON.stringify(userData));
 
       // Successful authentication
       res.redirect("/dashboard");
@@ -115,7 +125,7 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
 
     // Get activities data from Redis first
     let activities = await getDataRedisClient(
-      `activities:user:${req.user.token}`
+      `activities:user:${req.user.userId}`
     );
 
     if (activities) {
@@ -126,9 +136,22 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
 
       // Store in Redis with 24 hour expiry
       if (activities) {
+        // Create a clean copy of activities without circular references
+        const activitiesToStore = activities.map((activity) => ({
+          id: activity.id,
+          type: activity.type,
+          startTime: activity.startTime,
+          duration: activity.duration,
+          distance: activity.distance,
+          calories: activity.calories,
+          device: activity.device,
+          averageSpeed: activity.averageSpeed,
+          averagePace: activity.averagePace,
+        }));
+
         await setDataRedisClient(
-          `activities:user:${req.user.token}`,
-          JSON.stringify(activities),
+          `activities:user:${req.user.userId}`,
+          JSON.stringify(activitiesToStore),
           24 * 60 * 60
         );
       }
@@ -296,7 +319,7 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // Start server
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
