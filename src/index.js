@@ -104,7 +104,11 @@ app.get(
       const userKey = `user:${userIdResponse.userId}`;
 
       // Store in Redis with 24 hour expiry
-      await setDataRedisClient(userKey, JSON.stringify(userData));
+      await setDataRedisClient(
+        userKey,
+        JSON.stringify(userData),
+        7 * 24 * 60 * 60
+      );
 
       // Successful authentication
       res.redirect("/dashboard");
